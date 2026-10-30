@@ -1,0 +1,21 @@
+name: Build Android APK
+on: [workflow_dispatch, push]
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: 8.7 }
+      - run: gradle assembleDebug --no-daemon
+        env:
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wayfinder-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
