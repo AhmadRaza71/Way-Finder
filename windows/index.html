@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wayfinder</title>
+<style>
+:root{--bg:#0c0d10;--panel:rgba(22,23,28,.88);--line:rgba(255,255,255,.08);--text:#eceae6;--mute:#8d8f99;--acc:#e7b95a;--grad:linear-gradient(135deg,#f3cd82,#d6963a);--r:16px}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.4 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;overflow:hidden}
+#map{position:absolute;inset:0}
+#col{position:absolute;left:16px;top:16px;bottom:16px;width:min(390px,calc(100vw - 32px));display:flex;flex-direction:column;gap:10px;overflow:auto;pointer-events:none;scrollbar-width:none}
+.panel{pointer-events:auto;background:var(--panel);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 12px 40px #000a;padding:12px;animation:pop .22s ease-out}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}}
+@media (prefers-reduced-motion:reduce){.panel{animation:none}}
+.hidden{display:none!important}
+input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#101115;color:var(--text);font:inherit}
+input:focus,button:focus-visible,summary:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+button{font:inherit;color:var(--text);background:#17181d;border:1px solid var(--line);border-radius:12px;padding:8px 12px;cursor:pointer;transition:background .15s,border-color .15s}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--grad);color:#1b1306;font-weight:600;border:0}
+button.stop{background:#e5675d;color:#2a0b08;border:0;font-weight:600}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chips button,.tabs button{border-radius:20px;padding:5px 12px;font-size:13px}
+.tabs button.on{border-color:var(--acc);color:var(--acc)}
+.row{display:flex;align-items:center;gap:10px;padding:9px 6px;border-radius:10px;cursor:pointer}
+.row:hover{background:#ffffff0d}
+.row div{flex:1;min-width:0}.row b,.row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+small,.mute{color:var(--mute)}
+h2{margin:0;font-size:17px;font-weight:600}
+.btns{display:flex;gap:8px;margin-top:10px}.btns button{flex:1}
+.big{font-size:26px;font-weight:600;letter-spacing:-.01em}
+.alts{display:flex;gap:6px;margin:8px 0}.alts button{flex:1;text-align:left;font-size:13px}.alts button.on{border-color:var(--acc)}
+.stop{display:flex;gap:8px;align-items:center;padding:4px 0}.stop span{color:var(--mute);width:78px;font-size:12px}.stop b{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stop button{padding:2px 8px;border-radius:8px}
+details{margin-top:8px}summary{cursor:pointer;color:var(--mute)}
+ol{margin:6px 0 0;padding-left:20px;max-height:200px;overflow:auto}ol li{padding:3px 0}ol li.now{color:var(--acc)}
+#banner{position:absolute;top:16px;left:50%;transform:translateX(-50%);max-width:min(560px,calc(100vw - 460px));min-width:300px;background:var(--panel);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:var(--r);padding:12px 18px;box-shadow:0 12px 40px #000a;display:flex;gap:16px;align-items:center;font-size:18px}
+#banner strong{font-size:26px;color:var(--acc);white-space:nowrap}
+.fabs{position:absolute;right:16px;bottom:28px;display:flex;flex-direction:column;gap:10px}
+.fab{width:46px;height:46px;border-radius:50%;padding:0;font-size:18px;background:var(--panel);backdrop-filter:blur(18px);box-shadow:0 8px 24px #000a}
+.fab.on{border-color:var(--acc);color:var(--acc)}
+#toast{position:absolute;bottom:20px;left:50%;transform:translate(-50%,20px);opacity:0;pointer-events:none;background:#1d1e24;border:1px solid var(--line);border-radius:12px;padding:10px 16px;max-width:560px;transition:.2s;z-index:9}
+#toast.show{opacity:1;transform:translate(-50%,0)}#toast.err{border-color:#e5675d}
+#setup{position:absolute;inset:0;background:#0c0d10ee;display:grid;place-items:center;z-index:20}
+#setup .panel{width:min(520px,92vw);padding:24px}
+#setup ol{max-height:none}
+.me{width:20px;height:20px;border-radius:50%;background:var(--acc);border:3px solid #fff;box-shadow:0 0 0 8px #e7b95a44}
+.pin{width:18px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#e5675d;border:2px solid #fff}
+@media (max-width:760px){#banner{max-width:none;left:16px;right:16px;transform:none;top:auto;bottom:16px}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="col">
+  <section class="panel" id="search">
+    <input id="q" placeholder="Search places or addresses" autocomplete="off" aria-label="Search">
+    <div id="sugg"></div>
+    <div class="chips" id="chips"></div>
+    <div id="lists">
+      <div class="chips tabs" style="margin-top:12px"><button id="tFav" class="on">Favourites</button><button id="tRec">Recent</button></div>
+      <div id="listBody"></div>
+    </div>
+  </section>
+  <section class="panel hidden" id="place">
+    <h2 id="pName"></h2><div class="mute" id="pAddr"></div><div class="mute" id="pMeta"></div>
+    <div class="btns"><button class="pri" id="bDir">Directions</button><button id="bStop">Add stop</button><button id="bFav" aria-label="Favourite">☆</button></div>
+  </section>
+  <section class="panel hidden" id="trip">
+    <div id="stops"></div>
+    <div class="alts" id="alts"></div>
+    <div class="big" id="tEta"></div><div class="mute" id="tSub"></div>
+    <div class="btns"><button class="pri" id="bGo">Start</button><button id="bClear">Clear</button></div>
+    <details><summary>Step by step</summary><ol id="steps"></ol></details>
+  </section>
+</div>
+
+<div id="banner" class="hidden"></div>
+<div class="fabs">
+  <button class="fab" id="fTraffic" title="Traffic" aria-label="Toggle traffic">🚦</button>
+  <button class="fab" id="fMe" title="Re-centre" aria-label="Re-centre on my location">◎</button>
+  <button class="fab" id="fKey" title="API key" aria-label="Settings">⚙</button>
+</div>
+<div id="toast" role="status"></div>
+
+<div id="setup" class="hidden">
+  <div class="panel">
+    <h2>Connect Google Maps</h2>
+    <p class="mute">Wayfinder uses Google Maps Platform. Create a key at console.cloud.google.com, turn on billing, and enable these APIs: Maps JavaScript API, Places API (New), Routes API and Geolocation API.</p>
+    <input id="keyIn" placeholder="Paste your API key" autocomplete="off">
+    <div class="btns"><button class="pri" id="keySave">Save and restart</button><button id="keyCancel" class="hidden">Cancel</button></div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+const rad=x=>x*Math.PI/180;
+const D=(a,b)=>{const x=Math.sin(rad(b.lat-a.lat)/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(rad(b.lng-a.lng)/2)**2;return 12742000*Math.asin(Math.sqrt(x))};
+const km=m=>m>=1000?(m/1000).toFixed(1)+' km':Math.max(10,Math.round(m/10)*10)+' m';
+const mins=s=>{const m=Math.max(1,Math.round(s/60));return m>=60?Math.floor(m/60)+' h '+m%60+' min':m+' min'};
+const clock=s=>new Date(Date.now()+s*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+const say=t=>{try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang=navigator.language;speechSynthesis.speak(u)}catch{}};
+let tt;function toast(t,err){const e=$('toast');e.textContent=t;e.className='show'+(err?' err':'');clearTimeout(tt);tt=setTimeout(()=>e.className='',err?8000:3500)}
+window.addEventListener('offline',()=>toast('You are offline. Maps, search and routing need an internet connection.',true));
+
+let KEY,map,Place,ACS,Tok,AdvMk,token,me=null,meMk=null,pinMk=null,traffic=null;
+let cur=null,stops=[],routes=[],sel=0,lines=[],nav=false,idx=0,items=[],spoken=-1,reached=0,busy=false,tab='fav';
+const FIELDS=['id','displayName','formattedAddress','location','rating','userRatingCount','primaryTypeDisplayName'];
+
+(async()=>{
+  KEY=await wf.getKey();
+  if(!KEY){$('setup').classList.remove('hidden');return}
+  window.gm_authFailure=()=>toast('Google rejected the API key. Check billing and that the required APIs are enabled.',true);
+  const s=document.createElement('script');
+  s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(KEY)}&v=weekly&loading=async`;
+  s.onload=init;s.onerror=()=>toast('Cannot reach Google Maps. Check your internet connection.',true);
+  document.head.appendChild(s);
+})();
+
+$('keySave').onclick=()=>{const k=$('keyIn').value.trim();if(k)wf.setKey(k)};
+$('fKey').onclick=()=>{$('setup').classList.remove('hidden');$('keyCancel').classList.remove('hidden')};
+$('keyCancel').onclick=()=>$('setup').classList.add('hidden');
+
+async function init(){
+  const {Map}=await google.maps.importLibrary('maps');
+  const pl=await google.maps.importLibrary('places');Place=pl.Place;ACS=pl.AutocompleteSuggestion;Tok=pl.AutocompleteSessionToken;
+  AdvMk=(await google.maps.importLibrary('marker')).AdvancedMarkerElement;
+  await google.maps.importLibrary('geometry');
+  token=new Tok();
+  map=new Map($('map'),{center:{lat:20,lng:0},zoom:3,mapId:'DEMO_MAP_ID',colorScheme:google.maps.ColorScheme.DARK,disableDefaultUI:true,gestureHandling:'greedy',clickableIcons:true});
+  map.addListener('click',async e=>{
+    if(nav)return;
+    if(e.placeId){e.stop();try{const p=new Place({id:e.placeId});await p.fetchFields({fields:FIELDS});showPlace(p)}catch{toast('Could not load that place.',true)}}
+    else setCur({name:'Dropped pin',addr:e.latLng.lat().toFixed(5)+', '+e.latLng.lng().toFixed(5),pt:{lat:e.latLng.lat(),lng:e.latLng.lng()}});
+  });
+  traffic=new google.maps.TrafficLayer();
+  chips();lists();locate();
+}
+
+/* ---------- location ---------- */
+function locate(){
+  if(!navigator.geolocation){toast('Location is not available on this device.',true);return}
+  navigator.geolocation.watchPosition(p=>{
+    const first=!me;me={lat:p.coords.latitude,lng:p.coords.longitude};
+    if(!meMk){const c=el('div','me');meMk=new AdvMk({map,position:me,content:c,zIndex:99})}else meMk.position=me;
+    if(first)map.setOptions({center:me,zoom:15});
+    if(nav){const h=p.coords.heading;if(h!=null&&!isNaN(h)&&(p.coords.speed||0)>1&&map.setHeading)map.setHeading(h);tick()}
+  },e=>{if(!me)toast('Could not get your location ('+e.message+'). Turn on Location for desktop apps in Windows Settings > Privacy & security > Location.',true)},{enableHighAccuracy:true,maximumAge:2000,timeout:20000});
+}
+$('fMe').onclick=()=>{if(me){map.panTo(me);map.setZoom(16)}else toast('Waiting for your location…')};
+$('fTraffic').onclick=e=>{const on=!traffic.getMap();traffic.setMap(on?map:null);e.currentTarget.classList.toggle('on',on)};
+
+/* ---------- search ---------- */
+let st;
+$('q').addEventListener('input',()=>{
+  clearTimeout(st);const v=$('q').value.trim();
+  $('lists').classList.toggle('hidden',v.length>0);
+  if(v.length<2){$('sugg').replaceChildren();return}
+  st=setTimeout(async()=>{
+    try{
+      const req={input:v,sessionToken:token};if(me)req.locationBias={center:me,radius:50000};
+      const {suggestions}=await ACS.fetchAutocompleteSuggestions(req);
+      const box=$('sugg');box.replaceChildren();
+      if(!suggestions.length)box.append(el('div','mute','No places found. Try a different name.'));
+      suggestions.filter(s=>s.placePrediction).forEach(s=>{
+        const p=s.placePrediction;
+        box.append(row(p.mainText.text,p.secondaryText?.text||'',async()=>{
+          try{const pl=p.toPlace();await pl.fetchFields({fields:FIELDS});token=new Tok();box.replaceChildren();$('q').value='';$('lists').classList.remove('hidden');showPlace(pl)}
+          catch{toast('Could not load that place.',true)}
+        }));
+      });
+    }catch(e){toast('Search failed. Check your connection and that Places API (New) is enabled.',true)}
+  },250);
+});
+function row(a,b,fn){const r=el('div','row');const d=el('div');d.append(el('b',null,a),el('small',null,b));r.append(d);r.onclick=fn;return r}
+const CHIPS=[['⛽ Fuel','gas_station'],['🍴 Food','restaurant'],['🅿 Parking','parking'],['🏧 ATM','atm'],['🏥 Hospital','hospital']];
+function chips(){CHIPS.forEach(([l,t])=>{const b=el('button',null,l);b.onclick=()=>nearby(t);$('chips').append(b)})}
+async function nearby(type){
+  try{
+    const c=me||map.getCenter();
+    const {places}=await Place.searchNearby({fields:FIELDS,locationRestriction:{center:c,radius:5000},includedPrimaryTypes:[type],maxResultCount:8});
+    const box=$('sugg');box.replaceChildren();
+    if(!places.length){box.append(el('div','mute','Nothing found within 5 km.'));return}
+    places.forEach(p=>box.append(row(p.displayName,(p.primaryTypeDisplayName||'')+(p.rating?' · ★ '+p.rating:'')+' · '+p.formattedAddress,()=>{box.replaceChildren();showPlace(p)})));
+  }catch{toast('Nearby search failed. Check your connection and that Places API (New) is enabled.',true)}
+}
+
+/* ---------- place card, favourites, recents ---------- */
+function showPlace(p){setCur({id:p.id,name:p.displayName,addr:p.formattedAddress||'',pt:{lat:p.location.lat(),lng:p.location.lng()},meta:[p.primaryTypeDisplayName,p.rating?'★ '+p.rating+(p.userRatingCount?' ('+p.userRatingCount+')':''):''].filter(Boolean).join(' · ')})}
+function setCur(p){
+  cur=p;$('pName').textContent=p.name;$('pAddr').textContent=p.addr;$('pMeta').textContent=p.meta||'';
+  $('place').classList.remove('hidden');favBtn();
+  if(pinMk)pinMk.map=null;pinMk=new AdvMk({map,position:p.pt,content:el('div','pin')});
+  if(!routes.length)map.panTo(p.pt);if(map.getZoom()<14)map.setZoom(15);
+}
+const same=(a,b)=>a.name===b.name&&Math.abs(a.pt.lat-b.pt.lat)<1e-5&&Math.abs(a.pt.lng-b.pt.lng)<1e-5;
+const slim=p=>({name:p.name,addr:p.addr,pt:p.pt,meta:p.meta||''});
+function favBtn(){$('bFav').textContent=LS.get('fav',[]).some(f=>same(f,cur))?'★':'☆'}
+$('bFav').onclick=()=>{let f=LS.get('fav',[]);f=f.some(x=>same(x,cur))?f.filter(x=>!same(x,cur)):[slim(cur),...f];LS.set('fav',f);favBtn();lists()};
+$('tFav').onclick=()=>{tab='fav';lists()};$('tRec').onclick=()=>{tab='rec';lists()};
+function lists(){
+  $('tFav').classList.toggle('on',tab==='fav');$('tRec').classList.toggle('on',tab==='rec');
+  const a=LS.get(tab,[]),b=$('listBody');b.replaceChildren();
+  if(!a.length)b.append(el('div','mute',tab==='fav'?'Tap ☆ on a place to save it here.':'Places you navigate to appear here.'));
+  a.forEach(p=>b.append(row(p.name,p.addr,()=>setCur(p))));
+}
+function remember(p){const r=[slim(p),...LS.get('rec',[]).filter(x=>!same(x,p))].slice(0,8);LS.set('rec',r);lists()}
+
+/* ---------- routing ---------- */
+$('bDir').onclick=()=>{if(!cur)return;stops=[cur];compute()};
+$('bStop').onclick=()=>{
+  if(!cur)return;
+  if(stops.length>=5){toast('You can add up to 5 stops.',true);return}
+  if(stops.some(s=>same(s,cur))){toast('That place is already in your trip.');return}
+  stops.push(cur);compute();
+};
+$('bClear').onclick=clearRoute;
+const wp=p=>({location:{latLng:{latitude:p.lat,longitude:p.lng}}});
+const ll=l=>({lat:l.latitude,lng:l.longitude});
+async function compute(re){
+  if(!me){toast('Waiting for your location…');return}
+  if(!stops.length){clearRoute();return}
+  busy=true;
+  const body={origin:wp(me),destination:wp(stops.at(-1).pt),intermediates:stops.slice(0,-1).map(s=>wp(s.pt)),travelMode:'DRIVE',routingPreference:'TRAFFIC_AWARE',computeAlternativeRoutes:stops.length===1,languageCode:navigator.language};
+  const mask='routes.duration,routes.distanceMeters,routes.description,routes.polyline.encodedPolyline,routes.legs.endLocation,routes.legs.steps.distanceMeters,routes.legs.steps.startLocation,routes.legs.steps.navigationInstruction';
+  try{
+    const j=await wf.routes(body,mask);
+    if(j.error)throw new Error(j.error.message);
+    if(!j.routes?.length){toast('No driving route found to that place.',true);busy=false;return}
+    routes=j.routes.map(r=>{
+      const g=google.maps.geometry.encoding.decodePath(r.polyline.encodedPolyline);
+      const b=new google.maps.LatLngBounds();g.forEach(p=>b.extend(p));
+      const it=[];
+      r.legs.forEach((lg,li)=>{
+        lg.steps.forEach(s=>it.push({pt:ll(s.startLocation.latLng),text:s.navigationInstruction?.instructions||'Continue',dist:s.distanceMeters||0}));
+        const last=li===r.legs.length-1;
+        it.push({pt:ll(lg.endLocation.latLng),text:last?'You have arrived':'You have reached stop '+(li+1),dist:0,arrive:last,leg:li});
+      });
+      return{dur:parseInt(r.duration),dist:r.distanceMeters,label:r.description||'Route',path:g,pathLL:g.map(p=>({lat:p.lat(),lng:p.lng()})),bounds:b,items:it};
+    });
+    sel=0;idx=0;spoken=-1;if(!re)reached=0;
+    drawRoutes(!re);renderTrip();remember(stops.at(-1));
+  }catch(e){toast('Routing failed: '+e.message,true)}
+  busy=false;
+}
+function drawRoutes(fit){
+  lines.forEach(l=>l.setMap(null));lines=[];
+  routes.forEach((r,i)=>{
+    const l=new google.maps.Polyline({map,path:r.path,strokeColor:i===sel?'#e7b95a':'#6b6e78',strokeWeight:i===sel?8:6,strokeOpacity:.95,zIndex:i===sel?2:1});
+    l.addListener('click',()=>{if(!nav){sel=i;drawRoutes();renderTrip()}});lines.push(l);
+  });
+  items=routes[sel].items;
+  if(fit&&!nav)map.fitBounds(routes[sel].bounds,{left:440,top:60,right:80,bottom:60});
+}
+function renderTrip(){
+  const r=routes[sel];$('trip').classList.remove('hidden');
+  const sb=$('stops');sb.replaceChildren();
+  stops.forEach((s,i)=>{const d=el('div','stop');const x=el('button',null,'✕');x.setAttribute('aria-label','Remove');
+    x.onclick=()=>{stops.splice(i,1);compute()};d.append(el('span',null,i===stops.length-1?'Destination':'Stop '+(i+1)),el('b',null,s.name),x);sb.append(d)});
+  const ab=$('alts');ab.replaceChildren();
+  if(routes.length>1)routes.forEach((x,i)=>{const b=el('button',i===sel?'on':'',mins(x.dur)+' · '+km(x.dist));b.title=x.label;b.onclick=()=>{sel=i;drawRoutes();renderTrip()};ab.append(b)});
+  $('tEta').textContent=mins(r.dur)+' · arrive '+clock(r.dur);
+  $('tSub').textContent=km(r.dist)+(routes.length>1?' · via '+r.label:'');
+  const ol=$('steps');ol.replaceChildren();
+  r.items.forEach((s,i)=>{const li=el('li',null,s.text+(s.dist?' ('+km(s.dist)+')':''));li.dataset.i=i;ol.append(li)});
+  $('bGo').textContent=nav?'Stop':'Start';$('bGo').className=nav?'stop':'pri';
+}
+function clearRoute(){
+  stopNav();stops=[];routes=[];lines.forEach(l=>l.setMap(null));lines=[];
+  $('trip').classList.add('hidden');
+}
+
+/* ---------- turn-by-turn ---------- */
+$('bGo').onclick=()=>nav?stopNav():startNav();
+function startNav(){
+  if(!routes.length)return;
+  if(!me){toast('Waiting for your location…');return}
+  nav=true;idx=0;spoken=-1;$('banner').classList.remove('hidden');$('place').classList.add('hidden');
+  map.setZoom(17);map.panTo(me);renderTrip();say('Starting navigation');tick();
+}
+function stopNav(){
+  if(!nav)return;nav=false;$('banner').classList.add('hidden');
+  try{speechSynthesis.cancel();map.setHeading&&map.setHeading(0)}catch{}
+  if(routes.length)renderTrip();
+}
+function tick(){
+  if(!nav||busy||!routes.length||!me)return;
+  const r=routes[sel];let best=1e12;for(const q of r.pathLL){const v=D(me,q);if(v<best)best=v}
+  if(best>80){say('Rerouting');stops=stops.slice(reached);compute(true).then(()=>{if(nav)tick()});return}
+  const n=items[Math.min(idx+1,items.length-1)],dn=D(me,n.pt);
+  if(dn<200&&spoken!==idx){spoken=idx;say(n.arrive?'Your destination is '+km(dn)+' ahead':'In '+km(dn)+', '+n.text)}
+  if(n.arrive&&dn<35){say('You have arrived');stopNav();return}
+  if(dn<35&&idx<items.length-1){if(n.leg!==undefined&&!n.arrive)reached=n.leg+1;idx++}
+  const nx=items[Math.min(idx+1,items.length-1)],d2=D(me,nx.pt);
+  const rem=d2+items.slice(idx+1).reduce((a,s)=>a+s.dist,0),t=r.dur*rem/Math.max(r.dist,1);
+  const b=$('banner');b.replaceChildren(el('strong',null,km(d2)),el('span',null,nx.text));
+  $('tEta').textContent=mins(t)+' · arrive '+clock(t);$('tSub').textContent=km(rem)+' remaining';
+  document.querySelectorAll('#steps li').forEach(li=>li.classList.toggle('now',+li.dataset.i===idx+1));
+  map.panTo(me);
+}
+</script>
+</body>
+</html>
